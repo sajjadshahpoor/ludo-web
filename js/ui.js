@@ -16,6 +16,7 @@
   const STEP_MS = 150;
   const CPU_ROLL_DELAY = 650;
   const CPU_MOVE_DELAY = 450;
+  const AUTO_ROLL_DELAY = 700;
 
   const PRESETS = {
     cpu1: [['human', 'You'], ['off'], ['cpu', 'Computer'], ['off']],
@@ -36,6 +37,7 @@
 
   // ---------- Sound ----------
   let muted = store.get('ludo.muted', false);
+  let autoRoll = store.get('ludo.autoRoll', false);
   let audioCtx = null;
   function tone(freq, duration, type = 'sine', delay = 0, volume = 0.08) {
     if (muted) return;
@@ -335,8 +337,22 @@
       setTimeout(() => { if (id === gameId) rollDice(); }, CPU_ROLL_DELAY);
     } else {
       setDiceEnabled(true);
-      setStatus(extra ? 'Roll again!' : 'Your turn — roll the dice.');
+      if (autoRoll) {
+        setStatus(extra ? 'Rolling again…' : 'Your turn — rolling…');
+        scheduleAutoRoll();
+      } else {
+        setStatus(extra ? 'Roll again!' : 'Your turn — roll the dice.');
+      }
     }
+  }
+
+  // Rolls for the current human player if auto-roll is on and they still need to roll.
+  function scheduleAutoRoll() {
+    const id = gameId;
+    setTimeout(() => {
+      if (id !== gameId || !autoRoll || busy || game.phase !== 'roll' || current().type !== 'human') return;
+      rollDice();
+    }, AUTO_ROLL_DELAY);
   }
 
   async function rollDice() {
@@ -488,6 +504,14 @@
   $('#setupBtn').addEventListener('click', showSetup);
   $('#newGameBtn').addEventListener('click', () => {
     if (!game || game.phase === 'over' || confirm('Leave this game and start a new one?')) showSetup();
+  });
+
+  $('#autoRoll').checked = autoRoll;
+  $('#autoRoll').addEventListener('change', e => {
+    autoRoll = e.target.checked;
+    store.set('ludo.autoRoll', autoRoll);
+    e.target.blur(); // keep Space for rolling, not toggling
+    if (autoRoll && game && game.phase === 'roll' && current().type === 'human') scheduleAutoRoll();
   });
 
   function renderSoundBtn() { $('#soundBtn').textContent = muted ? '🔇' : '🔊'; }

@@ -9,6 +9,7 @@ No installs, no build step, no dependencies. Just HTML, CSS and vanilla JavaScri
 - **Play vs Computer**: 1 to 3 computer opponents that capture, escape danger and race home
 - **Play with Friends**: 2 to 4 players taking turns on one device (pass and play)
 - **Mix and match**: each color can be a player, a computer or empty
+- **Auto-roll** switch: the dice rolls itself on your turn, and you only pick which token to move
 - Animated dice and token moves, with sound effects you can mute
 - Works on desktop and mobile, in light and dark mode
 - Keyboard shortcuts: `Space` rolls, `1`–`4` pick a token
