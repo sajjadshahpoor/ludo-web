@@ -155,8 +155,64 @@
     game.phase = 'roll';
   }
 
+  // ---------- Computer player ----------
+
+  // How many opponent tokens could hit relative `progress` of `color` next turn.
+  function dangerAt(game, playerIdx, progress) {
+    if (!isOnTrack(progress)) return 0;
+    const color = game.players[playerIdx].color;
+    const idx = trackIndex(color, progress);
+    if (SAFE_INDEXES.has(idx)) return 0;
+    let danger = 0;
+    game.players.forEach((op, pi) => {
+      if (pi === playerIdx) return;
+      op.tokens.forEach(pos => {
+        if (isOnTrack(pos)) {
+          const opIdx = trackIndex(op.color, pos);
+          const dist = (idx - opIdx + TRACK_LEN) % TRACK_LEN;
+          // Opponent must also not have turned into its own home column before reaching us.
+          if (dist >= 1 && dist <= 6 && pos + dist <= LAST_TRACK) danger++;
+        }
+      });
+    });
+    return danger;
+  }
+
+  function scoreMove(game, pi, ti) {
+    const player = game.players[pi];
+    const from = player.tokens[ti];
+    const to = from === -1 ? 0 : from + game.dice;
+    let score = 0;
+
+    const caps = capturesAt(game, pi, to);
+    if (caps.length) score += 100 + caps.length * 10;
+    if (to === HOME) score += 80;
+    if (from === -1) score += 60;
+    if (from <= LAST_TRACK && to > LAST_TRACK && to !== HOME) score += 50; // into home column
+
+    const dangerBefore = dangerAt(game, pi, from);
+    const dangerAfter = dangerAt(game, pi, to);
+    score += dangerBefore * 25; // escaping
+    score -= dangerAfter * 35;  // walking into danger
+
+    if (isOnTrack(to) && SAFE_INDEXES.has(trackIndex(player.color, to))) score += 20;
+    score += to * 0.3; // generally prefer advancing lead tokens
+    return score + Math.random(); // tiny tie-breaker
+  }
+
+  function chooseMove(game) {
+    const movable = movableTokens(game, game.current, game.dice);
+    let best = movable[0];
+    let bestScore = -Infinity;
+    movable.forEach(ti => {
+      const s = scoreMove(game, game.current, ti);
+      if (s > bestScore) { bestScore = s; best = ti; }
+    });
+    return best;
+  }
+
   global.Ludo = {
     COLORS, TRACK, HOME_COLUMN, START_INDEX, SAFE_INDEXES, HOME, LAST_TRACK,
-    trackIndex, createGame, roll, move, nextTurn, movableTokens, canMove,
+    trackIndex, createGame, roll, move, nextTurn, movableTokens, chooseMove, canMove,
   };
 })(typeof window !== 'undefined' ? window : this);
