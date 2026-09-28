@@ -33,7 +33,11 @@
     set(key, value) {
       try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* ignore */ }
     },
+    remove(key) {
+      try { localStorage.removeItem(key); } catch (e) { /* ignore */ }
+    },
   };
+  const SAVE_KEY = 'ludo.savedGame';
 
   // ---------- Sound ----------
   let muted = store.get('ludo.muted', false);
@@ -360,6 +364,8 @@
   let pending = false;    // this device sent an action that hasn't come back yet
   let fast = false;       // replaying history after (re)joining: skip animations and sound
   let extraRoll = false;  // current player is on a bonus roll
+  let gameSeats = [];     // seats the current game started with
+  let actionLog = [];     // actions applied so far (saved so a local game survives a reload)
 
   const wait = ms => (fast ? Promise.resolve() : sleep(ms));
 
@@ -395,8 +401,12 @@
       const action = queue.shift();
       applied++;
       pending = false;
+      // Save before animating, so a reload mid-move still replays this action.
+      actionLog.push(action);
+      saveGame();
       await applyAction(action);
       if (id !== gameId) return;
+      if (game.phase === 'over') saveGame(); // finished games aren't offered for resume
     }
     processing = false;
     decide();
@@ -411,10 +421,19 @@
     }
   }
 
-  function startGame(list, session, history) {
+  // Local games are saved after every action; online games live in the room instead.
+  function saveGame() {
+    if (net) return;
+    if (!game || game.phase === 'over') store.remove(SAVE_KEY);
+    else store.set(SAVE_KEY, { seats: gameSeats, actions: actionLog, savedAt: Date.now() });
+  }
+
+  function startGame(list, session, past) {
     gameId++;
     const id = gameId;
     net = session || null;
+    gameSeats = list;
+    actionLog = past ? past.slice() : [];
     queue = [];
     applied = 0;
     pending = false;
@@ -432,12 +451,12 @@
     layoutTokens();
     showTurn(false);
 
-    if (history && history.length) {
+    if (past && past.length) {
       // Catch up on moves made before we (re)joined.
       processing = true;
       fast = true;
       (async () => {
-        for (const a of history) {
+        for (const a of past) {
           applied++;
           await applyAction(a);
           if (id !== gameId) return;
@@ -449,6 +468,7 @@
         else decide();
       })();
     } else {
+      saveGame();
       decide();
     }
   }
@@ -464,6 +484,21 @@
     $('#newGameBtn').classList.add('hidden');
     $('#setup').classList.remove('hidden');
     renderSeats();
+    renderResume();
+  }
+
+  // Offer to continue a local game that was interrupted (reload, closed tab, phone locked).
+  function renderResume() {
+    const box = $('#resumeBox');
+    const saved = store.get(SAVE_KEY, null);
+    const valid = saved && Array.isArray(saved.seats) && Array.isArray(saved.actions) && saved.actions.length;
+    box.classList.toggle('hidden', !valid);
+    if (!valid) return;
+    const names = saved.seats.filter(s => s.type !== 'off').map(s => s.name).join(', ');
+    const moves = saved.actions.filter(a => a.t === 'move').length;
+    const mins = Math.round((Date.now() - (saved.savedAt || Date.now())) / 60000);
+    const when = mins < 1 ? 'just now' : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.round(mins / 60)} h ago` : `${Math.round(mins / 1440)} d ago`;
+    $('#resumeText').textContent = `${names} · ${moves} move${moves === 1 ? '' : 's'} · ${when}`;
   }
 
   function showTurn(extra) {
@@ -696,7 +731,9 @@
   $('#newGameBtn').addEventListener('click', () => {
     if (net) {
       if (confirm('Leave this online game?')) net.leaveRoom();
-    } else if (!game || game.phase === 'over' || confirm('Leave this game and start a new one?')) {
+    } else if (!game || game.phase === 'over') {
+      showSetup();
+    } else if (confirm('Leave this game? You can resume it later from the setup screen.')) {
       showSetup();
     }
   });
@@ -738,6 +775,16 @@
     if (document.body.classList.contains('playing')) e.preventDefault();
   });
 
+  $('#resumeBtn').addEventListener('click', () => {
+    const saved = store.get(SAVE_KEY, null);
+    if (saved) startGame(saved.seats, null, saved.actions);
+  });
+  $('#discardBtn').addEventListener('click', () => {
+    store.remove(SAVE_KEY);
+    renderResume();
+  });
+
   renderSoundBtn();
   renderSeats();
+  renderResume();
 })();
