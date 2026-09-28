@@ -194,6 +194,7 @@
   let movable = [];
   const overrides = {}; // "pi-ti" -> progress shown while animating
   const tokenEls = {};
+  const hintEls = {};     // token index -> its landing marker
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const current = () => game.players[game.current];
@@ -221,6 +222,8 @@
         el.className = `token ${p.color}`;
         el.setAttribute('aria-label', `${LABEL[p.color]} token ${ti + 1}`);
         el.addEventListener('click', () => onTokenClick(pi, ti));
+        ['mouseenter', 'focus'].forEach(ev => el.addEventListener(ev, () => focusHint(pi, ti, true)));
+        ['mouseleave', 'blur'].forEach(ev => el.addEventListener(ev, () => focusHint(pi, ti, false)));
         layer.appendChild(el);
         tokenEls[`${pi}-${ti}`] = el;
       });
@@ -260,6 +263,40 @@
     movable = list;
     Object.values(tokenEls).forEach(el => el.classList.remove('movable'));
     list.forEach(ti => tokenEls[`${game.current}-${ti}`].classList.add('movable'));
+    renderHints(list);
+  }
+
+  // Mark where each movable token would land. Tapping a marker moves that token.
+  function renderHints(list) {
+    const layer = $('#hints');
+    layer.innerHTML = '';
+    Object.keys(hintEls).forEach(k => delete hintEls[k]);
+    if (!list.length) return;
+    const pi = game.current;
+    const p = game.players[pi];
+    const bySpot = {};
+    list.forEach(ti => {
+      const from = p.tokens[ti];
+      const to = from === -1 ? 0 : from + game.dice;
+      const [x, y] = tokenCenter(p.color, to, ti);
+      const spot = `${x},${y}`;
+      if (bySpot[spot]) { hintEls[ti] = bySpot[spot]; return; } // tokens stacked together share one marker
+      const capture = L.capturesAt(game, pi, to).length > 0;
+      const el = document.createElement('button');
+      el.className = `hint ${p.color}${capture ? ' capture' : ''}${to === L.HOME ? ' home' : ''}`;
+      el.style.left = `${(x / 15) * 100}%`;
+      el.style.top = `${(y / 15) * 100}%`;
+      el.setAttribute('aria-label', `Move token ${ti + 1} here${capture ? ' and capture' : ''}`);
+      el.title = capture ? 'Lands here and captures!' : to === L.HOME ? 'Reaches home!' : 'Lands here';
+      el.addEventListener('click', () => onTokenClick(pi, ti));
+      layer.appendChild(el);
+      hintEls[ti] = bySpot[spot] = el;
+    });
+  }
+
+  function focusHint(pi, ti, on) {
+    if (!game || pi !== game.current || !movable.includes(ti) || !hintEls[ti]) return;
+    hintEls[ti].classList.toggle('focus', on);
   }
 
   // ---------- Panel ----------

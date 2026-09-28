@@ -213,6 +213,6 @@
 
   global.Ludo = {
     COLORS, TRACK, HOME_COLUMN, START_INDEX, SAFE_INDEXES, HOME, LAST_TRACK,
-    trackIndex, createGame, roll, move, nextTurn, movableTokens, chooseMove, canMove,
+    trackIndex, createGame, roll, move, nextTurn, movableTokens, chooseMove, canMove, capturesAt,
   };
 })(typeof window !== 'undefined' ? window : this);
