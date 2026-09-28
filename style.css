@@ -566,6 +566,8 @@ kbd {
 .credit a { color: var(--text); font-weight: 600; text-decoration: none; }
 .credit a:hover { text-decoration: underline; }
 
+.confetti { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 60; }
+
 /* ---------- Modal ---------- */
 .modal {
   position: fixed;

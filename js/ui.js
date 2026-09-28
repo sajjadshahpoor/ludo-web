@@ -718,11 +718,57 @@
     showTurn(false);
   }
 
+  // A short confetti burst in the four Ludo colors.
+  function confetti() {
+    if (fast || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const canvas = document.createElement('canvas');
+    canvas.className = 'confetti';
+    document.body.appendChild(canvas);
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.width = innerWidth * dpr;
+    const h = canvas.height = innerHeight * dpr;
+    const colors = Object.values(COLOR_HEX);
+    const pieces = Array.from({ length: 160 }, (_, i) => ({
+      x: w / 2 + (Math.random() - 0.5) * w * 0.2,
+      y: h * 0.45,
+      vx: (Math.random() - 0.5) * 22 * dpr,
+      vy: (-12 - Math.random() * 16) * dpr,
+      size: (5 + Math.random() * 6) * dpr,
+      rot: Math.random() * Math.PI,
+      spin: (Math.random() - 0.5) * 0.4,
+      color: colors[i % colors.length],
+    }));
+    const start = performance.now();
+    (function frame(now) {
+      const t = now - start;
+      ctx.clearRect(0, 0, w, h);
+      ctx.globalAlpha = Math.max(0, 1 - Math.max(0, t - 2200) / 800);
+      pieces.forEach(p => {
+        p.vy += 0.55 * dpr;
+        p.vx *= 0.985;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.rot += p.spin;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.rot);
+        ctx.fillStyle = p.color;
+        ctx.fillRect(-p.size / 2, -p.size / 4, p.size, p.size / 2);
+        ctx.restore();
+      });
+      if (t < 3000) requestAnimationFrame(frame);
+      else canvas.remove();
+    })(start);
+    setTimeout(() => canvas.remove(), 3500); // in case frames stop (e.g. tab in background)
+  }
+
   function showWinner(pi) {
     const p = game.players[pi];
     const humans = game.players.filter(pl => pl.type === 'human').length;
     const mine = net ? isMine(p) : p.name === 'You';
     if (!fast) sfx.win();
+    confetti();
     setDiceEnabled(false);
     setStatus(`${p.name} wins!`);
     $('#winTitle').textContent = mine ? 'You win!' : `${p.name} wins!`;
