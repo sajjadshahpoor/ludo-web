@@ -391,6 +391,59 @@ kbd {
 @keyframes hint-in { from { opacity: 0; transform: translate(-50%, -50%) scale(.4); } }
 @keyframes capture-pulse { 50% { box-shadow: 0 0 0 4px rgba(229, 57, 53, .35); } }
 
+/* ---------- Reactions ---------- */
+.reactions {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 4px;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+}
+.reactions button {
+  padding: 6px 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 22px;
+  line-height: 1;
+  transition: transform .1s, background .1s;
+}
+.reactions button:hover { background: var(--bg); }
+.reactions button:active { transform: scale(.85); }
+#bubbles { z-index: 8; }
+.bubble {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  animation: bubble-up 2.6s ease-out forwards;
+}
+.bubble-emoji {
+  font-size: min(11vw, 64px);
+  line-height: 1;
+  filter: drop-shadow(0 3px 4px rgba(0, 0, 0, .35));
+}
+.bubble-name {
+  margin-top: 2px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .65);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+@keyframes bubble-up {
+  0% { opacity: 0; transform: translate(-50%, -20%) scale(.3); }
+  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
+  25% { transform: translate(-50%, -50%) scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; transform: translate(-50%, -110%) scale(1); }
+}
+
 /* ---------- Side panel ---------- */
 .panel { width: 280px; display: flex; flex-direction: column; gap: 16px; }
 .turn-card {
@@ -560,6 +613,8 @@ kbd {
   .turn-who { justify-content: flex-start; margin: 0; font-size: 17px; }
   .status { margin: 2px 0 0; min-height: 0; font-size: 14px; }
   .switch { margin-top: 4px; justify-self: start; }
+  .reactions { padding: 3px; }
+  .reactions button { font-size: 20px; padding: 5px 0; }
 
   /* One compact row of player chips */
   .player-list { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }

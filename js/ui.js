@@ -13,6 +13,9 @@
   const BASE_SPOTS = [[2, 2], [4, 2], [2, 4], [4, 4]];
   const FINISH_SPOT = { red: [6.55, 7.5], green: [7.5, 6.55], yellow: [8.45, 7.5], blue: [7.5, 8.45] };
 
+  const REACTIONS = ['👍', '😂', '😮', '😡', '🎉', '👋'];
+  const REACTION_COOLDOWN = 1200;
+
   const STEP_MS = 150;
   const CPU_ROLL_DELAY = 650;
   const CPU_MOVE_DELAY = 450;
@@ -449,6 +452,8 @@
     drawBoard();
     createTokens();
     layoutTokens();
+    $('#bubbles').innerHTML = '';
+    renderReactionBar();
     showTurn(false);
 
     if (past && past.length) {
@@ -670,6 +675,44 @@
     nextTurn();
   }
 
+  // ---------- Reactions (online) ----------
+  let lastReactionAt = 0;
+  function renderReactionBar() {
+    const bar = $('#reactions');
+    bar.classList.toggle('hidden', !net);
+    if (!net || bar.childElementCount) return;
+    REACTIONS.forEach(emoji => {
+      const btn = document.createElement('button');
+      btn.textContent = emoji;
+      btn.setAttribute('aria-label', `Send ${emoji}`);
+      btn.addEventListener('click', () => {
+        if (!net || Date.now() - lastReactionAt < REACTION_COOLDOWN) return;
+        lastReactionAt = Date.now();
+        net.react(emoji);
+        btn.blur();
+      });
+      bar.appendChild(btn);
+    });
+  }
+
+  // Float an emoji up from a player's yard, with their name.
+  function showReaction(color, emoji) {
+    if (!game || !REACTIONS.includes(emoji)) return;
+    const p = game.players.find(pl => pl.color === color);
+    if (!p) return;
+    const [bx, by] = BASE_ORIGIN[color];
+    const el = document.createElement('div');
+    el.className = `bubble ${color}`;
+    el.style.left = `${((bx + 3) / 15) * 100}%`;
+    el.style.top = `${((by + 3) / 15) * 100}%`;
+    el.innerHTML = '<span class="bubble-emoji"></span><span class="bubble-name"></span>';
+    el.firstChild.textContent = emoji;
+    el.lastChild.textContent = net && isMine(p) ? 'You' : p.name;
+    $('#bubbles').appendChild(el);
+    if (!fast) tone(880, 0.08, 'sine', 0, 0.04);
+    setTimeout(() => el.remove(), 2600);
+  }
+
   function nextTurn() {
     L.nextTurn(game);
     showTurn(false);
@@ -705,6 +748,7 @@
     showSetup,
     enqueue,
     clearPending,
+    showReaction,
     refreshPanel() { if (game) renderPanel(); },
     // A player left an online game: the computer takes over their tokens.
     setPlayerType(color, type) {

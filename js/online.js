@@ -6,7 +6,7 @@
  *   status      'lobby' | 'playing' | 'closed'
  *   round       increases every time a new game starts in the room
  *   seats/{color}   { type: 'open' | 'human' | 'cpu' | 'off', uid?, name? }
- *   players/{uid}   { name, online }
+ *   players/{uid}   { name, online, reaction?: { e: emoji, at: time } }
  *   actions/{round}/{00000..}   every roll and move, in order: { t: 'roll', v } | { t: 'move', k }
  *
  * Each device replays the same actions through the same engine, so every board stays identical.
@@ -37,6 +37,7 @@
   let actionsRef = null;
   let session = null;      // game session handed to the UI while playing
   let playingRound = 0;
+  let seenReactions = {};  // uid -> timestamp of the last reaction already shown
   let notice = '';         // message shown on the online home screen
   let working = false;
 
@@ -153,7 +154,7 @@
     connRef.on('value', snap => {
       if (snap.val() !== true) return;
       me.onDisconnect().update({ online: false });
-      me.set({ name: playerName() || 'Player', online: true });
+      me.update({ name: playerName() || 'Player', online: true });
     });
 
     roomRef.on('value', snap => onRoom(snap.val()));
@@ -172,6 +173,7 @@
       if (playingRound !== r.round) return startRound(r);
       // Players who left mid-game are taken over by the computer.
       L.COLORS.forEach(c => { if (r.seats[c] && r.seats[c].type === 'cpu') App.setPlayerType(c, 'cpu'); });
+      showNewReactions(r);
       App.refreshPanel();
       return;
     }
@@ -197,6 +199,10 @@
       return { color: c, type, name: type === 'human' ? s.name : LABEL[c] };
     });
 
+    // Only show reactions sent from now on, not ones left over from earlier.
+    seenReactions = {};
+    reactionsOf(r).forEach(x => { seenReactions[x.uid] = x.at; });
+
     const ref = roomRef.child(`actions/${round}`);
     const snap = await ref.once('value');
     if (playingRound !== round || !code) return;
@@ -217,6 +223,9 @@
         else leaveRoom();
       },
       leaveRoom,
+      react(emoji) {
+        roomRef.child(`players/${uid}/reaction`).set({ e: emoji, at: Date.now() }).catch(err => console.error(err));
+      },
       isOnline(color) {
         const seat = room && room.seats[color];
         const p = seat && seat.uid && room.players && room.players[seat.uid];
@@ -230,6 +239,24 @@
     ref.on('child_added', s => {
       if (Number(s.key) < keys.length) return; // already replayed
       App.enqueue(s.val());
+    });
+  }
+
+  function reactionsOf(r) {
+    const list = [];
+    L.COLORS.forEach(color => {
+      const seat = r.seats && r.seats[color];
+      const p = seat && seat.uid && r.players && r.players[seat.uid];
+      if (p && p.reaction && typeof p.reaction.at === 'number') list.push({ color, uid: seat.uid, ...p.reaction });
+    });
+    return list;
+  }
+
+  function showNewReactions(r) {
+    reactionsOf(r).forEach(x => {
+      if (x.at <= (seenReactions[x.uid] || 0)) return;
+      seenReactions[x.uid] = x.at;
+      App.showReaction(x.color, x.e);
     });
   }
 
