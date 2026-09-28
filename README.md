@@ -11,7 +11,7 @@ No installs, no build step, no dependencies. Just HTML, CSS and vanilla JavaScri
 - **Mix and match**: each color can be a player, a computer or empty
 - **Auto-roll** switch: the dice rolls itself on your turn, and you only pick which token to move
 - Animated dice and token moves, with sound effects you can mute
-- Works on desktop and mobile, in light and dark mode
+- Works on desktop and mobile, in light and dark mode. On phones the game fits one screen with no scrolling
 - Keyboard shortcuts: `Space` rolls, `1`–`4` pick a token
 
 ## Rules
@@ -48,6 +48,10 @@ style.css       layout, board, tokens, dice and animations
 js/engine.js    game rules, board geometry and computer player (no DOM code)
 js/ui.js        board rendering, turn flow, input and sound
 ```
+
+## Author
+
+Developed by **Sajjad SHAHPOOR** ([@sajjadshahpoor](https://github.com/sajjadshahpoor)).
 
 ## License
 

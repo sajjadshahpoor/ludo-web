@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#f3f1ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15171a" media="(prefers-color-scheme: dark)">
+  <meta name="author" content="Sajjad SHAHPOOR">
   <title>Ludo</title>
   <meta name="description" content="Play Ludo in your browser against the computer or with friends on the same device.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23fff'/><rect x='5' y='5' width='42' height='42' rx='8' fill='%23e53935'/><rect x='53' y='5' width='42' height='42' rx='8' fill='%2343a047'/><rect x='5' y='53' width='42' height='42' rx='8' fill='%231e88e5'/><rect x='53' y='53' width='42' height='42' rx='8' fill='%23fbc02d'/></svg>">
@@ -70,6 +73,10 @@
       <ul id="playerList" class="player-list"></ul>
     </aside>
   </main>
+
+  <footer class="credit">
+    Developed by <a href="https://github.com/sajjadshahpoor" target="_blank" rel="noopener">Sajjad SHAHPOOR</a>
+  </footer>
 
   <!-- Winner dialog -->
   <div id="winModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="winTitle">

@@ -307,6 +307,7 @@
     $('#setup').classList.add('hidden');
     $('#winModal').classList.add('hidden');
     $('#game').classList.remove('hidden');
+    document.body.classList.add('playing');
     $('#newGameBtn').classList.remove('hidden');
     drawBoard();
     createTokens();
@@ -318,6 +319,7 @@
     gameId++; // cancels any pending computer moves
     game = null;
     $('#game').classList.add('hidden');
+    document.body.classList.remove('playing');
     $('#winModal').classList.add('hidden');
     $('#newGameBtn').classList.add('hidden');
     $('#setup').classList.remove('hidden');
@@ -533,6 +535,15 @@
   });
 
   window.addEventListener('resize', () => { if (game) layoutTokens(); });
+
+  // Nothing on the game screen scrolls, so swallow touch drags and pinches there.
+  // This stops the page bouncing, pull-to-refresh and accidental zoom mid-game.
+  document.addEventListener('touchmove', e => {
+    if (document.body.classList.contains('playing')) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('gesturestart', e => {
+    if (document.body.classList.contains('playing')) e.preventDefault();
+  });
 
   renderSoundBtn();
   renderSeats();

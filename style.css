@@ -36,6 +36,11 @@ html, body { margin: 0; }
 
 body {
   min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overscroll-behavior: none;
+  touch-action: manipulation; /* no double-tap zoom */
   background: var(--bg);
   color: var(--text);
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -48,6 +53,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* ---------- Top bar ---------- */
 .topbar {
+  flex: none;
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -160,6 +167,7 @@ kbd {
 
 /* ---------- Game layout ---------- */
 .game {
+  width: 100%;
   display: flex;
   gap: 24px;
   justify-content: center;
@@ -168,7 +176,7 @@ kbd {
   max-width: 1100px;
   margin: 0 auto;
 }
-.board-wrap { flex: none; width: min(calc(100vh - 110px), 680px, calc(100vw - 32px)); }
+.board-wrap { flex: none; width: min(calc(100vh - 140px), 680px, calc(100vw - 32px)); }
 .board {
   position: relative;
   width: 100%;
@@ -340,6 +348,18 @@ kbd {
 .player-list .ptype { font-size: 12px; color: var(--muted); font-weight: 400; margin-left: 4px; }
 .player-list .home-count { font-size: 13px; color: var(--muted); }
 
+/* ---------- Footer ---------- */
+.credit {
+  flex: none;
+  margin-top: auto;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
+  text-align: center;
+  font-size: 13px;
+  color: var(--muted);
+}
+.credit a { color: var(--text); font-weight: 600; text-decoration: none; }
+.credit a:hover { text-decoration: underline; }
+
 /* ---------- Modal ---------- */
 .modal {
   position: fixed;
@@ -370,25 +390,56 @@ kbd {
 /* ---------- Small screens ---------- */
 @media (max-width: 900px) {
   .game { flex-direction: column; align-items: center; gap: 14px; }
-  .board-wrap { width: min(100%, 600px, calc(100vh - 260px)); min-width: 280px; }
-  .panel { width: 100%; max-width: 600px; }
+  .board-wrap { width: min(100%, 600px); min-width: 0; }
+  .panel { width: 100%; max-width: 600px; gap: 8px; }
   .turn-card {
     display: grid;
     grid-template-columns: auto 1fr;
     grid-template-rows: auto auto;
     align-items: center;
-    column-gap: 16px;
+    column-gap: 14px;
     text-align: left;
-    padding: 14px 16px;
+    padding: 10px 14px;
+    border-top-width: 5px;
   }
-  .turn-card .dice { grid-row: 1 / 4; grid-column: 1; width: 72px; height: 72px; padding: 10px; }
-  .dice .pip { width: 11px; height: 11px; }
-  .turn-who { justify-content: flex-start; margin: 0; font-size: 18px; }
-  .status { margin: 4px 0 0; min-height: 0; }
-  .switch { margin-top: 6px; }
-  .player-list { display: grid; grid-template-columns: repeat(2, 1fr); }
-  .player-list li { grid-template-columns: 14px 1fr auto; gap: 8px; padding: 8px 10px; }
-  .player-list .dot { width: 14px; height: 14px; }
+  .turn-card .dice { grid-row: 1 / 4; grid-column: 1; width: 64px; height: 64px; padding: 9px; border-radius: 14px; }
+  .dice .pip { width: 10px; height: 10px; }
+  .turn-who { justify-content: flex-start; margin: 0; font-size: 17px; }
+  .status { margin: 2px 0 0; min-height: 0; font-size: 14px; }
+  .switch { margin-top: 4px; justify-self: start; }
+
+  /* One compact row of player chips */
+  .player-list { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 6px; }
+  .player-list li {
+    grid-template-columns: 10px minmax(0, 1fr);
+    gap: 2px 6px;
+    padding: 6px 8px;
+    font-size: 13px;
+  }
+  .player-list .dot { width: 10px; height: 10px; }
+  .player-list .ptype { display: none; }
+  .player-list .home-count { grid-column: 1 / -1; font-size: 12px; }
+
+  /* While playing, the page is exactly one screen tall and never scrolls:
+     the board takes whatever space the header, panel and footer leave. */
+  body.playing { height: 100vh; height: 100dvh; overflow: hidden; user-select: none; -webkit-user-select: none; }
+  body.playing .topbar { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 8px; }
+  body.playing .icon-btn { width: 36px; height: 36px; }
+  body.playing .logo { font-size: 24px; }
+  body.playing .game { flex: 1; min-height: 0; padding: 0 12px 4px; gap: 10px; }
+  body.playing .board-wrap {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    max-width: 600px;
+    container-type: size;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  body.playing .board { width: min(100cqw, 100cqh); }
+  body.playing .panel { flex: none; }
+  body.playing .credit { padding-top: 6px; font-size: 12px; }
 }
 @media (max-width: 420px) {
   .topbar { padding: 10px 16px; }
