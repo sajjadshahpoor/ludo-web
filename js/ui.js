@@ -352,8 +352,22 @@
         li.title = `${pl.name} is offline`;
       }
       if (pl.type === 'cpu') li.querySelector('.pname').insertAdjacentHTML('beforeend', '<span class="ptype">CPU</span>');
+      const v = net && net.voice && pl.type === 'human' ? net.voice.info(pl.color) : null;
+      if (v) {
+        if (v.speaking) li.classList.add('speaking');
+        const icon = !v.me && v.status === 'failed' ? ['⚠️', `Voice couldn't connect to ${pl.name}`]
+          : v.mic ? ['🎤', v.me ? 'Your mic is on' : `${pl.name}'s mic is on`] : null;
+        if (icon) {
+          const span = document.createElement('span');
+          span.className = 'voice-ico';
+          span.textContent = icon[0];
+          span.title = icon[1];
+          li.querySelector('.pname').appendChild(span);
+        }
+      }
       list.appendChild(li);
     });
+    updateVoiceButtons();
   }
 
   // ---------- Turn flow ----------
@@ -680,7 +694,14 @@
   function renderReactionBar() {
     const bar = $('#reactions');
     bar.classList.toggle('hidden', !net);
-    if (!net || bar.childElementCount) return;
+    bar.classList.toggle('with-voice', !!(net && net.voice));
+    bar.innerHTML = '';
+    if (!net) return;
+    if (net.voice) {
+      bar.appendChild(voiceButton('micBtn', toggleMic));
+      bar.appendChild(voiceButton('hearBtn', toggleHear));
+      updateVoiceButtons();
+    }
     REACTIONS.forEach(emoji => {
       const btn = document.createElement('button');
       btn.textContent = emoji;
@@ -694,6 +715,61 @@
       bar.appendChild(btn);
     });
   }
+
+  // ---------- Voice (online) ----------
+  function voiceButton(id, onClick) {
+    const btn = document.createElement('button');
+    btn.id = id;
+    btn.className = 'voice-btn';
+    btn.addEventListener('click', () => { onClick(); btn.blur(); });
+    return btn;
+  }
+
+  async function toggleMic() {
+    if (!net || !net.voice) return;
+    const btn = $('#micBtn');
+    btn.disabled = true;
+    try {
+      await net.voice.toggleMic();
+    } catch (e) {
+      setStatus(e && e.name === 'NotAllowedError'
+        ? 'Microphone is blocked. Allow it in your browser settings to talk.'
+        : 'No microphone found on this device.');
+    }
+    btn.disabled = false;
+    updateVoiceButtons();
+  }
+
+  function toggleHear() {
+    if (!net || !net.voice) return;
+    if (net.voice.needsTap) net.voice.unlock(); // first tap just lets the browser play sound
+    else net.voice.toggleHear();
+    updateVoiceButtons();
+  }
+
+  function updateVoiceButtons() {
+    const mic = $('#micBtn');
+    const hearBtn = $('#hearBtn');
+    if (!mic || !net || !net.voice) return;
+    const v = net.voice;
+    mic.textContent = '🎤';
+    mic.classList.toggle('on', v.micOn);
+    mic.classList.toggle('off', !v.micOn);
+    mic.title = v.micOn ? 'Mic is on — tap to mute' : 'Mic is off — tap to talk';
+    mic.setAttribute('aria-label', mic.title);
+    mic.setAttribute('aria-pressed', String(v.micOn));
+    hearBtn.textContent = '🔊';
+    hearBtn.classList.toggle('off', !v.hear);
+    hearBtn.classList.toggle('attention', v.needsTap);
+    hearBtn.title = v.needsTap ? 'Tap to hear your friends' : v.hear ? 'Friends\' voices on — tap to mute' : 'Friends\' voices muted — tap to hear';
+    hearBtn.setAttribute('aria-label', hearBtn.title);
+    hearBtn.setAttribute('aria-pressed', String(v.hear));
+  }
+
+  // Browsers only play sound after a tap, so any tap also switches voice audio on.
+  document.addEventListener('pointerdown', () => {
+    if (net && net.voice && net.voice.needsTap) { net.voice.unlock(); updateVoiceButtons(); }
+  });
 
   // Float an emoji up from a player's yard, with their name.
   function showReaction(color, emoji) {

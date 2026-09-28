@@ -6,7 +6,7 @@
  *   status      'lobby' | 'playing' | 'closed'
  *   round       increases every time a new game starts in the room
  *   seats/{color}   { type: 'open' | 'human' | 'cpu' | 'off', uid?, name? }
- *   players/{uid}   { name, online, reaction?: { e: emoji, at: time } }
+ *   players/{uid}   { name, online, mic?, reaction?: { e: emoji, at: time }, rtc?: voice setup messages }
  *   actions/{round}/{00000..}   every roll and move, in order: { t: 'roll', v } | { t: 'move', k }
  *
  * Each device replays the same actions through the same engine, so every board stays identical.
@@ -17,6 +17,7 @@
 
   const L = window.Ludo;
   const App = window.LudoApp;
+  const Voice = window.LudoVoice;
   const $ = sel => document.querySelector(sel);
   const cfg = window.LUDO_FIREBASE_CONFIG;
   const SDK = 'https://www.gstatic.com/firebasejs/10.14.1/';
@@ -174,6 +175,7 @@
       // Players who left mid-game are taken over by the computer.
       L.COLORS.forEach(c => { if (r.seats[c] && r.seats[c].type === 'cpu') App.setPlayerType(c, 'cpu'); });
       showNewReactions(r);
+      syncVoice();
       App.refreshPanel();
       return;
     }
@@ -183,6 +185,7 @@
       session = null;
       playingRound = 0;
       detachActions();
+      if (Voice) Voice.stop();
       App.showSetup();
     }
     App.showTab('online');
@@ -223,6 +226,15 @@
         else leaveRoom();
       },
       leaveRoom,
+      voice: Voice && Voice.supported ? {
+        toggleMic: () => Voice.setMic(!Voice.micOn),
+        toggleHear: () => Voice.setHear(!Voice.hear),
+        unlock: () => Voice.unlock(),
+        get micOn() { return Voice.micOn; },
+        get hear() { return Voice.hear; },
+        get needsTap() { return Voice.needsTap; },
+        info: voiceInfo,
+      } : null,
       react(emoji) {
         roomRef.child(`players/${uid}/reaction`).set({ e: emoji, at: Date.now() }).catch(err => console.error(err));
       },
@@ -234,12 +246,39 @@
     };
 
     App.startGame(seats, session, keys.map(k => saved[k]));
+    syncVoice();
 
     actionsRef = ref;
     ref.on('child_added', s => {
       if (Number(s.key) < keys.length) return; // already replayed
       App.enqueue(s.val());
     });
+  }
+
+  // ---------- Voice ----------
+  // Connect voice with every other person playing (not computer seats).
+  function syncVoice() {
+    if (!Voice || !Voice.supported || !session || !room) return;
+    const peers = L.COLORS
+      .map(color => ({ color, seat: room.seats[color] }))
+      .filter(x => x.seat && x.seat.type === 'human' && x.seat.uid && x.seat.uid !== uid)
+      .map(x => ({ uid: x.seat.uid, color: x.color }));
+    Voice.sync({ key: code, roomRef, uid, peers, onChange: () => App.refreshPanel() });
+  }
+
+  // Mic / talking / connection state for one color, for the player chips.
+  function voiceInfo(color) {
+    const seat = room && room.seats[color];
+    if (!seat || seat.type !== 'human' || !seat.uid) return null;
+    if (seat.uid === uid) return { me: true, mic: Voice.micOn, speaking: Voice.selfSpeaking, status: 'connected' };
+    const p = room.players && room.players[seat.uid];
+    const peer = Voice.peerInfo(seat.uid);
+    return {
+      me: false,
+      mic: !!(p && p.mic && p.online !== false),
+      speaking: !!(peer && peer.speaking),
+      status: peer ? peer.status : 'connecting',
+    };
   }
 
   function reactionsOf(r) {
@@ -286,6 +325,7 @@
   }
 
   function leaveLocal(message) {
+    if (Voice) Voice.stop();
     if (roomRef) roomRef.off();
     if (connRef) connRef.off();
     if (roomRef && uid) roomRef.child(`players/${uid}`).onDisconnect().cancel();
