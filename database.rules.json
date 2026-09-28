@@ -3,8 +3,15 @@
     "rooms": {
       "$code": {
         ".read": "auth != null",
-        ".write": "auth != null && (!data.exists() || data.child('host').val() === auth.uid)",
+        ".write": "auth != null && ((!data.exists() && newData.child('host').val() === auth.uid) || (data.child('host').val() === auth.uid && !newData.exists()))",
+        "status": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+        },
+        "round": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid"
+        },
         "seats": {
+          ".write": "auth != null && data.parent().child('host').val() === auth.uid",
           "$color": {
             ".write": "auth != null && (data.child('uid').val() === auth.uid || (data.child('type').val() === 'open' && newData.child('type').val() === 'human' && newData.child('uid').val() === auth.uid))"
           }
