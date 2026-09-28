@@ -11,6 +11,10 @@ No installs and no build step. Just HTML, CSS and vanilla JavaScript, with Fireb
 - **Play Online**: create a room, share the link or 5-letter code, and friends join from their own phones. Empty seats can be filled with computer players, players can rejoin after a reload, and the computer takes over if someone leaves
 - **Mix and match**: each color can be a player, a computer or empty
 - **Auto-roll** switch: the dice rolls itself on your turn, and you only pick which token to move
+- **Move preview**: see where each token will land before you choose, with a ⚔️ on moves that capture. Tap the marker to move
+- **Resume**: games on one device are saved as you play, so a reload or closed tab doesn't lose them
+- **Emoji reactions** in online games: 👍 😂 😮 😡 🎉 👋 pop up over your corner on everyone's screen
+- Confetti when someone wins
 - Animated dice and token moves, with sound effects you can mute
 - Works on desktop and mobile, in light and dark mode. On phones the game fits one screen with no scrolling
 - Keyboard shortcuts: `Space` rolls, `1`–`4` pick a token
