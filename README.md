@@ -51,7 +51,7 @@ js/ui.js        board rendering, turn flow, input and sound
 
 ## Author
 
-Developed by **Sajjad SHAHPOOR** ([@sajjadshahpoor](https://github.com/sajjadshahpoor)).
+Developed by [**Sajjad SHAHPOOR**](https://sajjadshahpoor.github.io/developer/).
 
 ## License
 
