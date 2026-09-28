@@ -1,13 +1,14 @@
 # Ludo Web
 
-The classic board game Ludo in your browser. Play against the computer, or with friends on the same device.
+The classic board game Ludo in your browser. Play against the computer, with friends on the same device, or online with friends anywhere using a room code.
 
-No installs, no build step, no dependencies. Just HTML, CSS and vanilla JavaScript.
+No installs and no build step. Just HTML, CSS and vanilla JavaScript, with Firebase for online rooms.
 
 ## Features
 
 - **Play vs Computer**: 1 to 3 computer opponents that capture, escape danger and race home
 - **Play with Friends**: 2 to 4 players taking turns on one device (pass and play)
+- **Play Online**: create a room, share the link or 5-letter code, and friends join from their own phones. Empty seats can be filled with computer players, players can rejoin after a reload, and the computer takes over if someone leaves
 - **Mix and match**: each color can be a player, a computer or empty
 - **Auto-roll** switch: the dice rolls itself on your turn, and you only pick which token to move
 - Animated dice and token moves, with sound effects you can mute
@@ -40,13 +41,31 @@ python3 -m http.server 8000
 # then visit http://localhost:8000
 ```
 
+## Online play setup
+
+Online rooms use a free [Firebase](https://firebase.google.com) project (Spark plan, no billing).
+
+1. Create a project in the [Firebase console](https://console.firebase.google.com).
+2. **Authentication → Sign-in method**: enable **Anonymous**.
+3. **Realtime Database → Create database**, then paste [`database.rules.json`](database.rules.json) into the **Rules** tab and publish.
+4. **Project settings → Your apps → Web**: register an app and copy its config into [`js/firebase-config.js`](js/firebase-config.js).
+
+The config values identify the project and are safe to commit; the database rules control who can read and write.
+
+### How it works
+
+Each roll and move is written to the room as a small action (`{ t: 'roll', v: 4 }`, `{ t: 'move', k: 2 }`). Every device applies the same actions, in the same order, through the same game engine, so all boards stay identical. The player whose turn it is sends the action, and the host also sends the actions for computer seats. Someone who joins late or reloads replays the room's action list to catch up.
+
 ## Project structure
 
 ```
-index.html      page markup: setup screen, board, winner dialog
-style.css       layout, board, tokens, dice and animations
-js/engine.js    game rules, board geometry and computer player (no DOM code)
-js/ui.js        board rendering, turn flow, input and sound
+index.html            page markup: setup screen, online lobby, board, winner dialog
+style.css             layout, board, tokens, dice and animations
+js/engine.js          game rules, board geometry and computer player (no DOM code)
+js/ui.js              board rendering, turn flow, input and sound
+js/online.js          online rooms: create/join, lobby, syncing actions via Firebase
+js/firebase-config.js Firebase web app settings
+database.rules.json   Realtime Database security rules
 ```
 
 ## Author
