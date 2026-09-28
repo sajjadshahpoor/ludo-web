@@ -14,6 +14,7 @@ No installs and no build step. Just HTML, CSS and vanilla JavaScript, with Fireb
 - **Move preview**: see where each token will land before you choose, with a ⚔️ on moves that capture. Tap the marker to move
 - **Resume**: games on one device are saved as you play, so a reload or closed tab doesn't lose them
 - **Emoji reactions** in online games: 👍 😂 😮 😡 🎉 👋 pop up over your corner on everyone's screen
+- **Voice chat** in online games: tap 🎤 to talk and 🔊 to mute friends. Chips show who has their mic on and glow while they talk. Audio goes straight between players' browsers (WebRTC), so it's free
 - Confetti when someone wins
 - Animated dice and token moves, with sound effects you can mute
 - Works on desktop and mobile, in light and dark mode. On phones the game fits one screen with no scrolling
@@ -60,6 +61,8 @@ The config values identify the project and are safe to commit; the database rule
 
 Each roll and move is written to the room as a small action (`{ t: 'roll', v: 4 }`, `{ t: 'move', k: 2 }`). Every device applies the same actions, in the same order, through the same game engine, so all boards stay identical. The player whose turn it is sends the action, and the host also sends the actions for computer seats. Someone who joins late or reloads replays the room's action list to catch up.
 
+Voice chat connects each pair of players directly with WebRTC, using Google's free STUN servers to find a route. Firebase only carries the few setup messages, written under each player's own entry so no extra database rules are needed. Some strict networks (certain mobile carriers or office Wi-Fi) block direct connections; the player chip shows ⚠️ when voice can't connect.
+
 ## Project structure
 
 ```
@@ -68,6 +71,7 @@ style.css             layout, board, tokens, dice and animations
 js/engine.js          game rules, board geometry and computer player (no DOM code)
 js/ui.js              board rendering, turn flow, input and sound
 js/online.js          online rooms: create/join, lobby, syncing actions via Firebase
+js/voice.js           voice chat between players (WebRTC, set up through Firebase)
 js/firebase-config.js Firebase web app settings
 database.rules.json   Realtime Database security rules
 ```
