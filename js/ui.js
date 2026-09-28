@@ -40,7 +40,7 @@
   let autoRoll = store.get('ludo.autoRoll', false);
   let audioCtx = null;
   function tone(freq, duration, type = 'sine', delay = 0, volume = 0.08) {
-    if (muted) return;
+    if (muted || fast) return;
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       const t = audioCtx.currentTime + delay;
@@ -122,8 +122,18 @@
     $('#setupError').textContent = '';
     seats.forEach(s => { s.name = (s.name || '').trim() || LABEL[s.color]; });
     store.set('ludo.seats', seats);
-    startGame();
+    startGame(seats);
   });
+
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => showTab(tab.dataset.tab));
+  });
+  function showTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+    $('#localPanel').classList.toggle('hidden', name !== 'local');
+    $('#onlinePanel').classList.toggle('hidden', name !== 'online');
+    document.dispatchEvent(new CustomEvent('ludo:tab', { detail: name }));
+  }
 
   // ---------- Board drawing ----------
   function svgEl(tag, attrs, parent) {
@@ -181,7 +191,6 @@
   // ---------- Game state ----------
   let game = null;
   let gameId = 0;
-  let busy = false;
   let movable = [];
   const overrides = {}; // "pi-ti" -> progress shown while animating
   const tokenEls = {};
@@ -281,7 +290,7 @@
     const p = current();
     document.body.style.setProperty('--turn-color', COLOR_HEX[p.color]);
     $('#turnDot').className = `dot ${p.color}`;
-    $('#turnName').textContent = p.type === 'cpu' ? `${p.name} (computer)` : p.name;
+    $('#turnName').textContent = p.type === 'cpu' ? `${p.name} (computer)` : net && isMine(p) ? `${p.name} (you)` : p.name;
 
     const list = $('#playerList');
     list.innerHTML = '';
@@ -293,16 +302,88 @@
         <span class="pname"></span>
         <span class="home-count" title="Tokens home">🏠 ${home}/4</span>`;
       li.querySelector('.pname').textContent = pl.name;
+      if (net && isMine(pl)) li.querySelector('.pname').insertAdjacentHTML('beforeend', '<span class="ptype">you</span>');
+      if (net && pl.type === 'human' && !net.isOnline(pl.color)) {
+        li.classList.add('offline');
+        li.title = `${pl.name} is offline`;
+      }
       if (pl.type === 'cpu') li.querySelector('.pname').insertAdjacentHTML('beforeend', '<span class="ptype">CPU</span>');
       list.appendChild(li);
     });
   }
 
   // ---------- Turn flow ----------
-  function startGame() {
+  // Every roll and move is an action: { t: 'roll', v } or { t: 'move', k }.
+  // On one device act() queues it right away. Online, act() sends it to the room and
+  // every device (this one included) applies it when it arrives, so all boards stay in sync.
+  let net = null;         // online session from online.js, or null for same-device play
+  let queue = [];
+  let processing = false;
+  let applied = 0;        // actions applied in this game
+  let pending = false;    // this device sent an action that hasn't come back yet
+  let fast = false;       // replaying history after (re)joining: skip animations and sound
+  let extraRoll = false;  // current player is on a bonus roll
+
+  const wait = ms => (fast ? Promise.resolve() : sleep(ms));
+
+  // Does this device control player p? (Online, other people's colors are not ours.)
+  function isMine(p) {
+    return p.type === 'human' && (!net || net.myColors.has(p.color));
+  }
+  // Should this device make the decisions for the current player?
+  function iDrive() {
+    const p = current();
+    return p.type === 'cpu' ? (!net || net.isHost) : isMine(p);
+  }
+  function idle(id) {
+    return game && id === gameId && !processing && !queue.length && !pending;
+  }
+
+  function act(action) {
+    if (pending) return;
+    pending = true;
+    if (net) net.send(applied, action);
+    else enqueue(action);
+  }
+
+  function enqueue(action) {
+    queue.push(action);
+    if (!processing) processQueue();
+  }
+
+  async function processQueue() {
+    const id = gameId;
+    processing = true;
+    while (queue.length) {
+      const action = queue.shift();
+      applied++;
+      pending = false;
+      await applyAction(action);
+      if (id !== gameId) return;
+    }
+    processing = false;
+    decide();
+  }
+
+  async function applyAction(a) {
+    try {
+      if (a.t === 'roll') await applyRoll(a.v);
+      else if (a.t === 'move') await applyMove(a.k);
+    } catch (e) {
+      console.error('Could not apply action', a, e);
+    }
+  }
+
+  function startGame(list, session, history) {
     gameId++;
-    busy = false;
-    game = L.createGame(seats.filter(s => s.type !== 'off'));
+    const id = gameId;
+    net = session || null;
+    queue = [];
+    applied = 0;
+    pending = false;
+    processing = false;
+    extraRoll = false;
+    game = L.createGame(list.filter(s => s.type !== 'off'));
     Object.keys(overrides).forEach(k => delete overrides[k]);
     $('#setup').classList.add('hidden');
     $('#winModal').classList.add('hidden');
@@ -312,12 +393,34 @@
     drawBoard();
     createTokens();
     layoutTokens();
-    startTurn();
+    showTurn(false);
+
+    if (history && history.length) {
+      // Catch up on moves made before we (re)joined.
+      processing = true;
+      fast = true;
+      (async () => {
+        for (const a of history) {
+          applied++;
+          await applyAction(a);
+          if (id !== gameId) return;
+        }
+        fast = false;
+        layoutTokens();
+        processing = false;
+        if (queue.length) processQueue();
+        else decide();
+      })();
+    } else {
+      decide();
+    }
   }
 
   function showSetup() {
-    gameId++; // cancels any pending computer moves
+    gameId++; // cancels any pending moves
     game = null;
+    net = null;
+    queue = [];
     $('#game').classList.add('hidden');
     document.body.classList.remove('playing');
     $('#winModal').classList.add('hidden');
@@ -326,100 +429,120 @@
     renderSeats();
   }
 
-  function startTurn(extra) {
-    const id = gameId;
-    const p = current();
+  function showTurn(extra) {
+    extraRoll = extra;
     renderPanel();
     setMovable([]);
-    showDice(game.dice && extra ? game.dice : null);
+    setDiceEnabled(false);
+    showDice(extra ? game.dice : null);
+  }
 
-    if (p.type === 'cpu') {
-      setDiceEnabled(false);
-      setStatus(extra ? `${p.name} rolls again…` : `${p.name} is thinking…`);
-      setTimeout(() => { if (id === gameId) rollDice(); }, CPU_ROLL_DELAY);
-    } else {
-      setDiceEnabled(true);
-      if (autoRoll) {
-        setStatus(extra ? 'Rolling again…' : 'Your turn — rolling…');
-        scheduleAutoRoll();
+  // Called whenever no action is being applied: works out what should happen next.
+  function decide() {
+    if (!game || game.phase === 'over') return;
+    const id = gameId;
+    const p = current();
+    const later = (ms, fn) => setTimeout(() => { if (idle(id)) fn(); }, ms);
+
+    if (game.phase === 'roll') {
+      if (p.type === 'cpu') {
+        setDiceEnabled(false);
+        setStatus(extraRoll ? `${p.name} rolls again…` : `${p.name} is thinking…`);
+        if (iDrive()) later(CPU_ROLL_DELAY, () => act({ t: 'roll', v: randomDie() }));
+      } else if (isMine(p)) {
+        setDiceEnabled(true);
+        if (autoRoll) {
+          setStatus(extraRoll ? 'Rolling again…' : 'Your turn — rolling…');
+          scheduleAutoRoll();
+        } else {
+          setStatus(extraRoll ? 'Roll again!' : 'Your turn — roll the dice.');
+        }
       } else {
-        setStatus(extra ? 'Roll again!' : 'Your turn — roll the dice.');
+        setDiceEnabled(false);
+        setStatus(extraRoll ? `${p.name} rolls again…` : `Waiting for ${p.name} to roll…`);
       }
+      return;
+    }
+
+    // phase === 'move'
+    const options = L.movableTokens(game, game.current, game.dice);
+    if (p.type === 'cpu') {
+      setStatus(`${p.name} rolled ${game.dice}.`);
+      if (iDrive()) later(CPU_MOVE_DELAY, () => act({ t: 'move', k: L.chooseMove(game) }));
+    } else if (isMine(p)) {
+      setMovable(options);
+      const positions = new Set(options.map(ti => p.tokens[ti]));
+      if (positions.size === 1) {
+        // No real choice, so move for the player.
+        setStatus(`Rolled ${game.dice}.`);
+        later(350, () => act({ t: 'move', k: options[0] }));
+      } else {
+        setStatus(`Rolled ${game.dice} — pick a token to move.`);
+      }
+    } else {
+      setStatus(`${p.name} rolled ${game.dice} — choosing a token…`);
     }
   }
 
-  // Rolls for the current human player if auto-roll is on and they still need to roll.
+  function randomDie() { return 1 + Math.floor(Math.random() * 6); }
+
+  // Rolls for this device's player if auto-roll is on and they still need to roll.
   function scheduleAutoRoll() {
     const id = gameId;
     setTimeout(() => {
-      if (id !== gameId || !autoRoll || busy || game.phase !== 'roll' || current().type !== 'human') return;
-      rollDice();
+      if (!autoRoll || !idle(id) || game.phase !== 'roll' || !isMine(current())) return;
+      act({ t: 'roll', v: randomDie() });
     }, AUTO_ROLL_DELAY);
   }
 
-  async function rollDice() {
-    if (!game || busy || game.phase !== 'roll') return;
-    const id = gameId;
-    busy = true;
+  // Player pressed the dice (or Space).
+  function rollDice() {
+    if (!game || !idle(gameId) || game.phase !== 'roll' || !isMine(current())) return;
     setDiceEnabled(false);
+    act({ t: 'roll', v: randomDie() });
+  }
 
-    const dice = $('#dice');
-    dice.classList.add('rolling');
-    sfx.roll();
-    for (let i = 0; i < 6; i++) {
-      showDice(1 + Math.floor(Math.random() * 6));
-      await sleep(70);
+  function onTokenClick(pi, ti) {
+    if (!game || !idle(gameId) || pi !== game.current || !isMine(current())) return;
+    if (game.phase !== 'move' || !movable.includes(ti)) return;
+    setMovable([]);
+    act({ t: 'move', k: ti });
+  }
+
+  async function applyRoll(value) {
+    if (game.phase !== 'roll') throw new Error('Out-of-turn roll');
+    setDiceEnabled(false);
+    setMovable([]);
+
+    if (!fast) {
+      const dice = $('#dice');
+      dice.classList.add('rolling');
+      sfx.roll();
+      for (let i = 0; i < 6; i++) {
+        showDice(randomDie());
+        await sleep(70);
+      }
+      dice.classList.remove('rolling');
     }
-    dice.classList.remove('rolling');
-    if (id !== gameId) return;
 
     const p = current();
-    const result = L.roll(game);
+    const result = L.roll(game, value);
     showDice(result.dice);
 
     if (result.forfeit) {
       setStatus(`Three 6s in a row — ${p.name} loses the turn.`);
-      await sleep(1200);
-      return endTurn(id);
+      await wait(1200);
+      return nextTurn();
     }
     if (!result.movable.length) {
-      setStatus(`Rolled ${result.dice}. No moves available.`);
-      await sleep(1000);
-      return endTurn(id);
+      setStatus(`${isMine(p) ? 'Rolled' : `${p.name} rolled`} ${result.dice}. No moves available.`);
+      await wait(1000);
+      return nextTurn();
     }
-
-    if (p.type === 'cpu') {
-      setStatus(`${p.name} rolled ${result.dice}.`);
-      await sleep(CPU_MOVE_DELAY);
-      if (id !== gameId) return;
-      busy = false;
-      return doMove(L.chooseMove(game));
-    }
-
-    // Human: auto-move when there's no real choice.
-    const positions = new Set(result.movable.map(ti => p.tokens[ti]));
-    busy = false;
-    if (positions.size === 1) {
-      setStatus(`Rolled ${result.dice}.`);
-      setMovable(result.movable);
-      await sleep(350);
-      if (id !== gameId) return;
-      return doMove(result.movable[0]);
-    }
-    setStatus(`Rolled ${result.dice} — pick a token to move.`);
-    setMovable(result.movable);
   }
 
-  function onTokenClick(pi, ti) {
-    if (!game || busy || pi !== game.current || current().type !== 'human') return;
-    if (game.phase !== 'move' || !movable.includes(ti)) return;
-    doMove(ti);
-  }
-
-  async function doMove(ti) {
-    if (busy) return;
+  async function applyMove(ti) {
     const id = gameId;
-    busy = true;
     setMovable([]);
 
     const pi = game.current;
@@ -428,84 +551,117 @@
     const res = L.move(game, ti);
     const key = `${pi}-${ti}`;
 
-    // Keep captured tokens in place until the mover lands on them.
-    res.captured.forEach(c => { overrides[`${c.player}-${c.token}`] = before[c.player][c.token]; });
-
-    const el = tokenEls[key];
-    el.classList.add('moving');
-    for (const step of res.path) {
-      overrides[key] = step;
-      layoutTokens();
-      sfx.step();
-      await sleep(STEP_MS);
-      if (id !== gameId) return;
+    if (!fast) {
+      // Keep captured tokens in place until the mover lands on them.
+      res.captured.forEach(c => { overrides[`${c.player}-${c.token}`] = before[c.player][c.token]; });
+      const el = tokenEls[key];
+      el.classList.add('moving');
+      for (const step of res.path) {
+        overrides[key] = step;
+        layoutTokens();
+        sfx.step();
+        await sleep(STEP_MS);
+        if (id !== gameId) return;
+      }
+      delete overrides[key];
+      el.classList.remove('moving');
     }
-    delete overrides[key];
-    el.classList.remove('moving');
 
     if (res.captured.length) {
-      sfx.capture();
-      res.captured.forEach(c => {
-        const k = `${c.player}-${c.token}`;
-        tokenEls[k].classList.add('returning');
-        delete overrides[k];
-      });
+      if (!fast) {
+        sfx.capture();
+        res.captured.forEach(c => {
+          const k = `${c.player}-${c.token}`;
+          tokenEls[k].classList.add('returning');
+          delete overrides[k];
+        });
+      }
       layoutTokens();
       const victims = [...new Set(res.captured.map(c => game.players[c.player].name))].join(' & ');
       setStatus(`${p.name} captured ${victims}!`);
-      await sleep(550);
+      await wait(550);
       if (id !== gameId) return;
       res.captured.forEach(c => tokenEls[`${c.player}-${c.token}`].classList.remove('returning'));
-    } else {
+    } else if (!fast) {
       layoutTokens();
     }
 
-    if (res.reachedHome) sfx.home();
+    if (res.reachedHome && !fast) sfx.home();
     renderPanel();
 
-    if (res.won) {
-      busy = false;
-      return showWinner(pi);
-    }
+    if (res.won) return showWinner(pi);
     if (res.extraTurn) {
-      await sleep(res.captured.length ? 500 : 250);
-      if (id !== gameId) return;
-      busy = false;
-      return startTurn(true);
+      await wait(res.captured.length ? 500 : 250);
+      return showTurn(true);
     }
-    await sleep(200);
-    endTurn(id);
+    await wait(200);
+    nextTurn();
   }
 
-  function endTurn(id) {
-    if (id !== gameId) return;
-    busy = false;
+  function nextTurn() {
     L.nextTurn(game);
-    startTurn(false);
+    showTurn(false);
   }
 
   function showWinner(pi) {
     const p = game.players[pi];
     const humans = game.players.filter(pl => pl.type === 'human').length;
-    sfx.win();
+    const mine = net ? isMine(p) : p.name === 'You';
+    if (!fast) sfx.win();
     setDiceEnabled(false);
     setStatus(`${p.name} wins!`);
-    $('#winTitle').textContent = p.name === 'You' ? 'You win!' : `${p.name} wins!`;
-    $('#winText').textContent = p.type === 'cpu'
+    $('#winTitle').textContent = mine ? 'You win!' : `${p.name} wins!`;
+    let text = p.type === 'cpu'
       ? (humans === 1 ? 'The computer got there first. Try again?' : 'The computer got there first.')
       : 'All four tokens made it home. Well played!';
+    if (net && !net.isHost) text += ' Waiting for the host to start another game…';
+    $('#winText').textContent = text;
+    $('#againBtn').classList.toggle('hidden', !!net && !net.isHost);
+    $('#setupBtn').textContent = !net ? 'Change players' : net.isHost ? 'Back to lobby' : 'Leave room';
     $('#winModal').classList.remove('hidden');
-    $('#againBtn').focus();
+    if (!net || net.isHost) $('#againBtn').focus();
   }
 
+  // Online sessions call this if their action was rejected (someone else acted first).
+  function clearPending() {
+    pending = false;
+    if (idle(gameId)) decide();
+  }
+
+  window.LudoApp = {
+    startGame,
+    showSetup,
+    enqueue,
+    clearPending,
+    refreshPanel() { if (game) renderPanel(); },
+    // A player left an online game: the computer takes over their tokens.
+    setPlayerType(color, type) {
+      const p = game && game.players.find(pl => pl.color === color);
+      if (!p || p.type === type) return;
+      p.type = type;
+      renderPanel();
+      if (idle(gameId)) decide();
+    },
+    get inGame() { return !!game; },
+    showTab,
+  };
+
   // ---------- Controls ----------
-  $('#dice').addEventListener('click', () => {
-    if (game && current().type === 'human') rollDice();
+  $('#dice').addEventListener('click', rollDice);
+  $('#againBtn').addEventListener('click', () => {
+    if (net) net.playAgain();
+    else startGame(seats);
   });
-  $('#againBtn').addEventListener('click', startGame);
-  $('#setupBtn').addEventListener('click', showSetup);
+  $('#setupBtn').addEventListener('click', () => {
+    if (net) net.leaveGame(); // back to the online lobby (host) or out of the room (guest)
+    else showSetup();
+  });
   $('#newGameBtn').addEventListener('click', () => {
-    if (!game || game.phase === 'over' || confirm('Leave this game and start a new one?')) showSetup();
+    if (net) {
+      if (confirm('Leave this online game?')) net.leaveRoom();
+    } else if (!game || game.phase === 'over' || confirm('Leave this game and start a new one?')) {
+      showSetup();
+    }
   });
 
   $('#autoRoll').checked = autoRoll;
@@ -513,7 +669,7 @@
     autoRoll = e.target.checked;
     store.set('ludo.autoRoll', autoRoll);
     e.target.blur(); // keep Space for rolling, not toggling
-    if (autoRoll && game && game.phase === 'roll' && current().type === 'human') scheduleAutoRoll();
+    if (autoRoll && game && game.phase === 'roll' && isMine(current())) scheduleAutoRoll();
   });
 
   function renderSoundBtn() { $('#soundBtn').textContent = muted ? '🔇' : '🔊'; }
