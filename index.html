@@ -7,7 +7,7 @@
   <meta name="theme-color" content="#15171a" media="(prefers-color-scheme: dark)">
   <meta name="author" content="Sajjad SHAHPOOR">
   <title>Ludo</title>
-  <meta name="description" content="Play Ludo in your browser against the computer or with friends on the same device.">
+  <meta name="description" content="Play Ludo in your browser against the computer, with friends on the same device, or online with a room code.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%23fff'/><rect x='5' y='5' width='42' height='42' rx='8' fill='%23e53935'/><rect x='53' y='5' width='42' height='42' rx='8' fill='%2343a047'/><rect x='5' y='53' width='42' height='42' rx='8' fill='%231e88e5'/><rect x='53' y='53' width='42' height='42' rx='8' fill='%23fbc02d'/></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
@@ -23,19 +23,28 @@
   <!-- Setup screen -->
   <main id="setup" class="setup">
     <section class="card">
-      <h2>New game</h2>
-      <p class="muted">Pick a quick start or set up each seat yourself.</p>
-      <div class="presets">
-        <button class="preset" data-preset="cpu1"><span class="preset-icon">🧑 vs 💻</span>You vs Computer</button>
-        <button class="preset" data-preset="cpu3"><span class="preset-icon">🧑 vs 💻💻💻</span>You vs 3 Computers</button>
-        <button class="preset" data-preset="friends2"><span class="preset-icon">🧑 vs 🧑</span>2 Friends</button>
-        <button class="preset" data-preset="friends4"><span class="preset-icon">🧑🧑🧑🧑</span>4 Friends</button>
+      <div class="tabs" role="tablist">
+        <button class="tab active" data-tab="local" role="tab">On this device</button>
+        <button class="tab" data-tab="online" role="tab">Online with friends</button>
       </div>
 
-      <div id="seats" class="seats"></div>
+      <div id="localPanel">
+        <p class="muted">Play against the computer, or pass the device between friends.</p>
+        <div class="presets">
+          <button class="preset" data-preset="cpu1"><span class="preset-icon">🧑 vs 💻</span>You vs Computer</button>
+          <button class="preset" data-preset="cpu3"><span class="preset-icon">🧑 vs 💻💻💻</span>You vs 3 Computers</button>
+          <button class="preset" data-preset="friends2"><span class="preset-icon">🧑 vs 🧑</span>2 Friends</button>
+          <button class="preset" data-preset="friends4"><span class="preset-icon">🧑🧑🧑🧑</span>4 Friends</button>
+        </div>
 
-      <p id="setupError" class="error" role="alert"></p>
-      <button id="startBtn" class="primary">Start game</button>
+        <div id="seats" class="seats"></div>
+
+        <p id="setupError" class="error" role="alert"></p>
+        <button id="startBtn" class="primary">Start game</button>
+      </div>
+
+      <div id="onlinePanel" class="hidden"></div>
+
       <details class="rules">
         <summary>How to play</summary>
         <ul>
@@ -44,6 +53,7 @@
           <li>Landing on an opponent sends them back to their yard, except on ★ and start squares, which are safe.</li>
           <li>You get another roll when you roll a 6, capture a token, or bring a token home. Rolling three 6s in a row ends your turn.</li>
           <li>You need the exact number to reach home.</li>
+          <li>Online: create a room and send the link or code to friends. Each person controls their own color.</li>
           <li>Keyboard: <kbd>Space</kbd> rolls the dice, <kbd>1</kbd>–<kbd>4</kbd> pick a token.</li>
         </ul>
       </details>
@@ -93,5 +103,7 @@
 
   <script src="js/engine.js"></script>
   <script src="js/ui.js"></script>
+  <script src="js/firebase-config.js"></script>
+  <script src="js/online.js"></script>
 </body>
 </html>
